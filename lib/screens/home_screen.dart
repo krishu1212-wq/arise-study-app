@@ -1,11 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/mission_model.dart';
-import '../models/subject_model.dart';
 import '../theme/app_theme.dart';
 import '../widgets/particle_background.dart';
-import '../widgets/mission_card.dart';
-import '../widgets/subject_card.dart';
 import 'focus_timer_dialog.dart';
 import 'gate_dungeon_modal.dart';
 
@@ -16,9 +12,8 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // Player Stats
-  String playerName = "Kishan";
   int playerLevel = 28;
   int currentXp = 1240;
   int maxXp = 2000;
@@ -29,28 +24,33 @@ class _HomeScreenState extends State<HomeScreen> {
   // Selected Nav Tab
   int _selectedTabIndex = 0;
 
-  // Missions
-  List<Mission> missions = [
-    Mission(id: '1', title: 'Read 1 NCERT Book', icon: '📖', xpReward: 150, coinReward: 25, colorHex: '#00E5FF', isCompleted: true),
-    Mission(id: '2', title: 'Watch 1 Maths Lecture', icon: '▶', xpReward: 180, coinReward: 30, colorHex: '#FFB703', isCompleted: true),
-    Mission(id: '3', title: 'Learn 1 Page Vocab', icon: 'Aa', xpReward: 120, coinReward: 20, colorHex: '#A855F7', isCompleted: true),
-    Mission(id: '4', title: 'Solve 30 Practice Qs', icon: '📝', xpReward: 250, coinReward: 40, colorHex: '#F43F5E', isCompleted: false),
-    Mission(id: '5', title: 'Make English Notes', icon: '📑', xpReward: 200, coinReward: 35, colorHex: '#10B981', isCompleted: false),
-    Mission(id: '6', title: 'Revision Task (Sat)', icon: '🎯', xpReward: 300, coinReward: 50, colorHex: '#EAB308', isCompleted: false, isLocked: true),
-  ];
+  // Animation controller for pulsing glow
+  late AnimationController _glowController;
+  late Animation<double> _glowAnimation;
 
-  // Subjects
-  List<Subject> subjects = [
-    Subject(id: 'maths', name: 'Maths', icon: '➗', level: 24, progressPercent: 72, colorHex: '#F43F5E'),
-    Subject(id: 'english', name: 'English', icon: '📖', level: 18, progressPercent: 56, colorHex: '#00E5FF'),
-    Subject(id: 'computer', name: 'Computer', icon: '💻', level: 12, progressPercent: 34, colorHex: '#10B981'),
-    Subject(id: 'reasoning', name: 'Reasoning', icon: '🧠', level: 10, progressPercent: 28, colorHex: '#A855F7'),
-  ];
+  // Mission completion state
+  List<bool> missionCompleted = [true, true, true, false, false, false];
+  final List<int> missionXp = [150, 180, 120, 250, 200, 300];
 
   @override
   void initState() {
     super.initState();
+    _glowController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _glowAnimation = Tween<double>(begin: 0.4, end: 1.0).animate(
+      CurvedAnimation(parent: _glowController, curve: Curves.easeInOut),
+    );
+
     _loadPreferences();
+  }
+
+  @override
+  void dispose() {
+    _glowController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadPreferences() async {
@@ -71,13 +71,19 @@ class _HomeScreenState extends State<HomeScreen> {
     await prefs.setInt('coins', coins);
   }
 
-  void _onToggleMission(Mission mission) {
+  void _onToggleMission(int index) {
+    if (index == 5) {
+      _showToast("🔒 Locked! Unlocks on Saturday revision day.");
+      return;
+    }
+
     setState(() {
-      mission.isCompleted = !mission.isCompleted;
-      if (mission.isCompleted) {
-        _addXp(mission.xpReward);
-        coins += mission.coinReward;
-        _showToast("Quest Completed! +${mission.xpReward} XP, +${mission.coinReward} Coins");
+      missionCompleted[index] = !missionCompleted[index];
+      if (missionCompleted[index]) {
+        int xp = missionXp[index];
+        _addXp(xp);
+        coins += 30;
+        _showToast("⚡ Quest Completed! +$xp XP, +30 Coins");
       }
     });
     _savePreferences();
@@ -187,12 +193,12 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  int get completedMissionCount => missions.where((m) => m.isCompleted).length;
+  int get completedMissionCount => missionCompleted.where((c) => c).length;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AriseColors.background,
+      backgroundColor: const Color(0xFF030712),
       body: ParticleBackground(
         child: SafeArea(
           bottom: false,
@@ -200,22 +206,22 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               // Scrollable Body
               SingleChildScrollView(
-                padding: const EdgeInsets.only(left: 16, right: 16, top: 12, bottom: 90),
+                padding: const EdgeInsets.only(left: 12, right: 12, top: 8, bottom: 90),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildHeader(),
+                    const SizedBox(height: 12),
+                    _buildHeroBannerWithCharacter(),
                     const SizedBox(height: 14),
-                    _buildHeroBanner(),
-                    const SizedBox(height: 18),
                     _buildMissionsSection(),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 14),
                     _buildSubjectProgressSection(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     _buildFeatureActionGrid(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     _buildNextBestActionCard(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     _buildBossBattleBanner(),
                   ],
                 ),
@@ -235,7 +241,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Header: Profile, XP Bar, Gems, Coins, Streak
+  // Header: Exact Avatar with glowing eyes, XP Bar, Gems, Coins, Flame Streak
   Widget _buildHeader() {
     double xpProgress = (currentXp / maxXp).clamp(0.0, 1.0);
 
@@ -245,26 +251,26 @@ class _HomeScreenState extends State<HomeScreen> {
         // Avatar + Name + Level + XP Bar
         Row(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: const LinearGradient(
-                  colors: [AriseColors.neonCyan, AriseColors.neonBlue, AriseColors.neonPurple],
+            AnimatedBuilder(
+              animation: _glowAnimation,
+              builder: (ctx, child) => Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AriseColors.neonCyan.withOpacity(0.5 * _glowAnimation.value),
+                      blurRadius: 14 * _glowAnimation.value,
+                      spreadRadius: 2,
+                    ),
+                  ],
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: AriseColors.neonCyan.withOpacity(0.5),
-                    blurRadius: 10,
+                child: ClipOval(
+                  child: Image.asset(
+                    "assets/images/avatar.png",
+                    fit: BoxFit.cover,
                   ),
-                ],
-              ),
-              child: const Center(
-                child: CircleAvatar(
-                  radius: 22,
-                  backgroundColor: Color(0xFF070E24),
-                  child: Text("⚡", style: TextStyle(fontSize: 20)),
                 ),
               ),
             ),
@@ -274,9 +280,9 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Row(
                   children: [
-                    Text(
-                      playerName,
-                      style: const TextStyle(
+                    const Text(
+                      "Kishan",
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -317,7 +323,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         borderRadius: BorderRadius.circular(4),
                         child: LinearProgressIndicator(
                           value: xpProgress,
-                          backgroundColor: Colors.black45,
+                          backgroundColor: Colors.black54,
                           valueColor: const AlwaysStoppedAnimation<Color>(AriseColors.neonCyan),
                           minHeight: 5,
                         ),
@@ -352,6 +358,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         "$gems",
                         style: const TextStyle(color: AriseColors.textWhite, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
+                      const SizedBox(width: 2),
+                      const Text("+", style: TextStyle(color: AriseColors.neonCyan, fontSize: 10, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
@@ -372,15 +380,17 @@ class _HomeScreenState extends State<HomeScreen> {
                         "$coins",
                         style: const TextStyle(color: AriseColors.neonGold, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
+                      const SizedBox(width: 2),
+                      const Text("+", style: TextStyle(color: AriseColors.neonGold, fontSize: 10, fontWeight: FontWeight.bold)),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 6),
-            // Streak
+            // Streak with animated flame
             GestureDetector(
-              onTap: () => _showToast("🔥 $streakDays-Day Streak! 1.2x Daily XP multiplier"),
+              onTap: () => _showToast("🔥 $streakDays-Day Streak! Daily XP multiplier active"),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
                 decoration: BoxDecoration(
@@ -389,6 +399,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: AriseColors.neonGold.withOpacity(0.5)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.amber.withOpacity(0.2),
+                      blurRadius: 6,
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
@@ -408,121 +424,48 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Hero Banner: ARISE STUDY SYSTEM
-  Widget _buildHeroBanner() {
-    double phaseProgress = 0.68;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFF09142E),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AriseColors.neonCyan.withOpacity(0.4)),
-        boxShadow: [
-          BoxShadow(
-            color: AriseColors.neonCyan.withOpacity(0.15),
-            blurRadius: 18,
+  // Hero Banner: Exact Artwork with Castle, Glowing Blue Gate, and Character Silhouette
+  Widget _buildHeroBannerWithCharacter() {
+    return AnimatedBuilder(
+      animation: _glowAnimation,
+      builder: (ctx, child) => Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AriseColors.neonCyan.withOpacity(0.4 * _glowAnimation.value),
+            width: 1.5,
           ),
-        ],
-      ),
-      child: Column(
-        children: [
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text("👑", style: TextStyle(fontSize: 18)),
-            ],
-          ),
-          const Text(
-            "ARISE",
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 6,
+          boxShadow: [
+            BoxShadow(
+              color: AriseColors.neonCyan.withOpacity(0.25 * _glowAnimation.value),
+              blurRadius: 16,
+              spreadRadius: 1,
             ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: Image.asset(
+            "assets/images/hero_banner.png",
+            fit: BoxFit.contain,
+            width: double.infinity,
           ),
-          const Text(
-            "STUDY SYSTEM",
-            style: TextStyle(
-              color: AriseColors.neonCyan,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
-              letterSpacing: 3,
-            ),
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFF050B1B),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white12),
-            ),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    "“A SMALL STEP TODAY\nA BIGGER YOU TOMORROW.”",
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 11,
-                      fontStyle: FontStyle.italic,
-                      fontWeight: FontWeight.w600,
-                      height: 1.3,
-                    ),
-                  ),
-                ),
-                Container(
-                  width: 140,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0B1736),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AriseColors.neonCyan.withOpacity(0.3)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        "CURRENT PHASE",
-                        style: TextStyle(color: AriseColors.neonCyan, fontSize: 8, fontWeight: FontWeight.bold),
-                      ),
-                      const Text(
-                        "THE AWAKENING",
-                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Progress", style: TextStyle(color: AriseColors.textMuted, fontSize: 8)),
-                          Text("${(phaseProgress * 100).toInt()}%", style: const TextStyle(color: AriseColors.neonCyan, fontSize: 8, fontWeight: FontWeight.bold)),
-                        ],
-                      ),
-                      const SizedBox(height: 2),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(3),
-                        child: LinearProgressIndicator(
-                          value: phaseProgress,
-                          backgroundColor: Colors.black45,
-                          valueColor: const AlwaysStoppedAnimation<Color>(AriseColors.neonCyan),
-                          minHeight: 4,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
-  // Today's Missions
+  // Today's Missions: Exact Visual Cards with Interactive Checkbox
   Widget _buildMissionsSection() {
+    final missionImages = [
+      "assets/images/mission_ncert.png",
+      "assets/images/mission_maths.png",
+      "assets/images/mission_vocab.png",
+      "assets/images/mission_practice.png",
+      "assets/images/mission_notes.png",
+      "assets/images/mission_revision.png",
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -542,10 +485,10 @@ class _HomeScreenState extends State<HomeScreen> {
             Row(
               children: [
                 Text(
-                  "$completedMissionCount / ${missions.length} Completed",
+                  "$completedMissionCount / 6 Completed",
                   style: const TextStyle(color: AriseColors.neonGreen, fontSize: 11, fontWeight: FontWeight.bold),
                 ),
-                const SizedBox(width: 4),
+                const SizedBox(width: 6),
                 const Text("View All →", style: TextStyle(color: AriseColors.neonCyan, fontSize: 10, fontWeight: FontWeight.bold)),
               ],
             ),
@@ -553,13 +496,32 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 120,
+          height: 116,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
-            itemCount: missions.length,
-            itemBuilder: (ctx, idx) => MissionCard(
-              mission: missions[idx],
-              onToggle: () => _onToggleMission(missions[idx]),
+            itemCount: missionImages.length,
+            itemBuilder: (ctx, idx) => GestureDetector(
+              onTap: () => _onToggleMission(idx),
+              child: Container(
+                margin: const EdgeInsets.only(right: 8),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    if (missionCompleted[idx])
+                      BoxShadow(
+                        color: AriseColors.neonGreen.withOpacity(0.3),
+                        blurRadius: 8,
+                      ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    missionImages[idx],
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -567,8 +529,15 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Subject Progress
+  // Subject Progress: Exact 4-Column Subject Cards
   Widget _buildSubjectProgressSection() {
+    final subjectImages = [
+      "assets/images/subject_maths.png",
+      "assets/images/subject_english.png",
+      "assets/images/subject_computer.png",
+      "assets/images/subject_reasoning.png",
+    ];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -589,62 +558,49 @@ class _HomeScreenState extends State<HomeScreen> {
           ],
         ),
         const SizedBox(height: 10),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 4,
-            crossAxisSpacing: 8,
-            mainAxisSpacing: 8,
-            childAspectRatio: 0.85,
-          ),
-          itemCount: subjects.length,
-          itemBuilder: (ctx, idx) => SubjectCard(
-            subject: subjects[idx],
-            onTap: () => _showToast("📚 ${subjects[idx].name} Mastery: ${subjects[idx].progressPercent}%"),
-          ),
+        Row(
+          children: subjectImages.map((imgPath) {
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 3),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    imgPath,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
   }
 
-  // Action Features Grid: Quests, Practice, Training, Inventory, System Core
+  // 5 Action Tiles: Quests, Practice, Training, Inventory, System Core (Exact 3D Artworks)
   Widget _buildFeatureActionGrid() {
-    final features = [
-      {'title': 'Quests', 'sub': 'Daily & Sp.', 'icon': '📜', 'color': AriseColors.neonGold},
-      {'title': 'Practice', 'sub': 'Solve & Grow', 'icon': '⚔️', 'color': AriseColors.neonPurple},
-      {'title': 'Training', 'sub': 'Your Journey', 'icon': '🗺️', 'color': AriseColors.neonCyan},
-      {'title': 'Inventory', 'sub': 'Items & Rew.', 'icon': '🎁', 'color': AriseColors.neonGold},
-      {'title': 'System Core', 'sub': 'Stats & Ana.', 'icon': '💠', 'color': AriseColors.neonCyan},
+    final actionImages = [
+      {"img": "assets/images/card_quests.png", "title": "Quests"},
+      {"img": "assets/images/card_practice.png", "title": "Practice"},
+      {"img": "assets/images/card_training.png", "title": "Training"},
+      {"img": "assets/images/card_inventory.png", "title": "Inventory"},
+      {"img": "assets/images/card_system_core.png", "title": "System Core"},
     ];
 
     return Row(
-      children: features.map((f) {
-        Color c = f['color'] as Color;
+      children: actionImages.map((item) {
         return Expanded(
           child: GestureDetector(
-            onTap: () => _showToast("✨ Opening ${f['title']}"),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 2.5),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: BoxDecoration(
-                color: AriseColors.cardBg,
+            onTap: () => _showToast("✨ Opening ${item['title']}"),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 2),
+              child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: c.withOpacity(0.35)),
-              ),
-              child: Column(
-                children: [
-                  Text(f['icon'] as String, style: const TextStyle(fontSize: 18)),
-                  const SizedBox(height: 4),
-                  Text(
-                    f['title'] as String,
-                    style: TextStyle(color: c, fontSize: 9.5, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    f['sub'] as String,
-                    style: const TextStyle(color: AriseColors.textMuted, fontSize: 7),
-                  ),
-                ],
+                child: Image.asset(
+                  item["img"]!,
+                  fit: BoxFit.contain,
+                ),
               ),
             ),
           ),
@@ -653,147 +609,67 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  // Next Best Action Card
+  // Next Best Action Card (Exact Artwork with Start Now Button)
   Widget _buildNextBestActionCard() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF09142E),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AriseColors.neonCyan.withOpacity(0.4)),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: AriseColors.neonGold.withOpacity(0.15),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AriseColors.neonGold.withOpacity(0.4)),
-                ),
-                child: const Center(child: Text("🎯", style: TextStyle(fontSize: 20))),
-              ),
-              const SizedBox(width: 12),
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "NEXT BEST ACTION",
-                    style: TextStyle(color: AriseColors.neonGold, fontSize: 9, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 2),
-                  Text(
-                    "Watch Percentage - Class 1",
-                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    "(Careerwill) • Est. 45 mins",
-                    style: TextStyle(color: AriseColors.textMuted, fontSize: 9.5),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AriseColors.neonCyan,
-              foregroundColor: const Color(0xFF050814),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            ),
-            onPressed: () {
-              showDialog(
-                context: context,
-                builder: (ctx) => FocusTimerDialog(
-                  onSessionComplete: () {
-                    _addXp(400);
-                    setState(() => coins += 100);
-                    _showToast("🏆 Focus Session Finished! +400 XP, +100 Coins");
-                  },
-                ),
-              );
+    return GestureDetector(
+      onTap: () {
+        showDialog(
+          context: context,
+          builder: (ctx) => FocusTimerDialog(
+            onSessionComplete: () {
+              _addXp(400);
+              setState(() => coins += 100);
+              _showToast("🏆 Focus Session Finished! +400 XP, +100 Coins");
             },
-            child: const Row(
-              children: [
-                Icon(Icons.play_arrow, size: 16),
-                SizedBox(width: 2),
-                Text("Start Now", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
-              ],
-            ),
           ),
-        ],
+        );
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.asset(
+          "assets/images/next_action.png",
+          fit: BoxFit.contain,
+          width: double.infinity,
+        ),
       ),
     );
   }
 
-  // Boss Battle Banner
+  // Saturday Boss Battle Banner (Exact Artwork with Shadow Monarch Beast)
   Widget _buildBossBattleBanner() {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFF160A26),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AriseColors.neonPurple.withOpacity(0.5)),
-        boxShadow: [
-          BoxShadow(
-            color: AriseColors.neonPurple.withOpacity(0.15),
-            blurRadius: 14,
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF3B0764),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text(
-                  "SATURDAY",
-                  style: TextStyle(color: AriseColors.neonPurple, fontSize: 8, fontWeight: FontWeight.bold),
-                ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                "BOSS BATTLE",
-                style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w900, letterSpacing: 1),
-              ),
-              const Text(
-                "Complete your weekly revision to unlock!",
-                style: TextStyle(color: AriseColors.textMuted, fontSize: 9.5),
+    return GestureDetector(
+      onTap: () => _showToast("🔒 Complete weekly revision to unlock Boss Battle!"),
+      child: AnimatedBuilder(
+        animation: _glowAnimation,
+        builder: (ctx, child) => Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: AriseColors.neonPurple.withOpacity(0.3 * _glowAnimation.value),
+                blurRadius: 14 * _glowAnimation.value,
               ),
             ],
           ),
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.black45,
-              border: Border.all(color: AriseColors.neonPurple.withOpacity(0.4)),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: Image.asset(
+              "assets/images/boss_battle.png",
+              fit: BoxFit.contain,
+              width: double.infinity,
             ),
-            child: const Center(child: Text("🔒", style: TextStyle(fontSize: 14))),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  // Bottom Navigation Bar
+  // Bottom Navigation Bar with exact glowing central GATE portal
   Widget _buildBottomNavBar() {
     return Container(
-      height: 70,
+      height: 72,
       decoration: BoxDecoration(
-        color: const Color(0xFF040816).withOpacity(0.96),
+        color: const Color(0xFF040816).withOpacity(0.97),
         border: Border(top: BorderSide(color: AriseColors.neonCyan.withOpacity(0.25))),
       ),
       child: Stack(
@@ -805,15 +681,15 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               _buildNavItem(0, Icons.home, "Home"),
               _buildNavItem(1, Icons.play_circle_outline, "Classes"),
-              const SizedBox(width: 50), // Spacer for central Gate button
+              const SizedBox(width: 60), // Spacer for central Gate button
               _buildNavItem(2, Icons.shield_outlined, "Practice"),
               _buildNavItem(3, Icons.note_alt_outlined, "Notes"),
             ],
           ),
 
-          // Glowing central GATE button
+          // Glowing central GATE button with exact portal artwork
           Positioned(
-            top: -18,
+            top: -24,
             child: GestureDetector(
               onTap: () {
                 showDialog(
@@ -834,39 +710,28 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 );
               },
-              child: Column(
-                children: [
-                  Container(
-                    width: 56,
-                    height: 56,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        colors: [AriseColors.neonBlue, AriseColors.neonCyan],
+              child: AnimatedBuilder(
+                animation: _glowAnimation,
+                builder: (ctx, child) => Container(
+                  width: 68,
+                  height: 68,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AriseColors.neonCyan.withOpacity(0.7 * _glowAnimation.value),
+                        blurRadius: 20 * _glowAnimation.value,
+                        spreadRadius: 2,
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: AriseColors.neonCyan.withOpacity(0.6),
-                          blurRadius: 18,
-                          spreadRadius: 2,
-                        ),
-                      ],
-                    ),
-                    child: const Center(
-                      child: Text("⛩️", style: TextStyle(fontSize: 26)),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      "assets/images/gate_portal.png",
+                      fit: BoxFit.cover,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    "GATE",
-                    style: TextStyle(
-                      color: AriseColors.neonCyan,
-                      fontSize: 9.5,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.5,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
